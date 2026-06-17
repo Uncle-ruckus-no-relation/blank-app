@@ -160,7 +160,7 @@ LANGUAGES = {
 }
 
 # Language selector
-lang = st.sidebar.selectbox("Language / Jezik / Язык / Језик", list(LANGUAGES.keys()), index=0)
+lang = st.sidebar.selectbox("Language / Jazyk ", list(LANGUAGES.keys()), index=0)
 tx = LANGUAGES[lang]  # Translation function
 
 st.title(tx["title"])
@@ -179,6 +179,17 @@ if 'x_input' not in st.session_state:
 
 if 'num_x_axes' not in st.session_state:
     st.session_state.num_x_axes = 2
+if 'num_right_axes' not in st.session_state:
+    st.session_state.num_right_axes = 3
+
+
+def add_x_vector():
+    st.session_state.num_x_axes = min(4, st.session_state.get("num_x_axes", 2) + 1)
+
+
+def remove_x_vector():
+    if st.session_state.get("num_x_axes", 2) > 1:
+        st.session_state.num_x_axes = st.session_state.get("num_x_axes", 2) - 1
 
 
 def parse_number_list(value_str):
@@ -223,8 +234,11 @@ legend_location = st.sidebar.selectbox(
 legend_font_size = st.sidebar.number_input(tx["legend_font_size"], value=10, min_value=6, max_value=30, step=1)
 legend_font_family = st.sidebar.selectbox(tx["legend_font_family"], ["sans", "serif", "monospace", "cursive", "fantasy", "dejavusans", "times"], index=0)
 legend_frame = st.sidebar.checkbox(tx["legend_frame"], False)
-num_x_axes = st.sidebar.number_input(tx["x_axes"], min_value=1, max_value=4, value=st.session_state.num_x_axes, step=1, key="num_x_axes")
-num_right_axes = st.sidebar.number_input(tx["y_axes"], min_value=1, max_value=8, value=st.session_state.get("num_right_axes", 3), step=1, key="num_right_axes")
+# Let the widgets read/write session state via their `key`; avoid programmatically
+# passing session_state values into `value=` which can lead to widget/session
+# state policy warnings when mutated later.
+num_x_axes = st.sidebar.number_input(tx["x_axes"], min_value=1, max_value=4, step=1, key="num_x_axes")
+num_right_axes = st.sidebar.number_input(tx["y_axes"], min_value=1, max_value=8, step=1, key="num_right_axes")
 
 # CSV import
 uploaded = st.sidebar.file_uploader(tx["csv_import"] + " (first column X, other columns series)", type=["csv"])
@@ -243,20 +257,20 @@ with col1:
 # X values input (or from CSV) for the first axis (X1)
 col_x_buttons, col_x_info = st.columns([1, 6])
 with col_x_buttons:
-    if st.button("➕ Add X vector"):
-        st.session_state.num_x_axes = min(4, st.session_state.num_x_axes + 1)
-        st.experimental_rerun()
-    if st.button("➖ Remove X vector") and st.session_state.num_x_axes > 1:
-        st.session_state.num_x_axes -= 1
-        st.experimental_rerun()
+    st.button("➕ Add X vector", on_click=add_x_vector)
+    st.button("➖ Remove X vector", on_click=remove_x_vector)
+
 with col_x_info:
     st.markdown("**X vectors:** create multiple X value columns and assign them per series.")
 
-x_input = st.text_input(tx["x_values"] + " (X1)", value=st.session_state.x_input, key="x_input")
+x_input = st.text_input(tx["x_values"] + " (X1)", key="x_input")
 x_list = parse_number_list(x_input)
 if not x_list:
     x_list = [1, 2, 3, 4, 5]
-    st.session_state.x_input = "1, 2, 3, 4, 5"
+    # Don't mutate session_state.x_input after the widget is created; use a
+    # local preview value instead so we don't trigger Streamlit session-state
+    # modification policies during script run.
+    x_input_preview = "1, 2, 3, 4, 5"
 
 # If CSV uploaded, read and populate
 if uploaded is not None:
@@ -398,7 +412,17 @@ for s in st.session_state.series:
         continue
     y = pd.to_numeric(df[s["name"]], errors='coerce').values.astype(float)
     x_axis_name = s.get("x_axis", "X1")
-    x_vals = x_axis_values.get(x_axis_name, np.array([np.nan] * len(y), dtype=float))
+    x_vals = x_axis_values.get(x_axis_name, None)
+    # Normalize/align x_vals to the same length as y to avoid boolean-mask
+    # indexing errors when the table/columns have different lengths.
+    if x_vals is None:
+        x_vals = np.array([np.nan] * len(y), dtype=float)
+    else:
+        x_vals = np.asarray(x_vals, dtype=float)
+        if x_vals.shape[0] < y.shape[0]:
+            x_vals = np.pad(x_vals, (0, y.shape[0] - x_vals.shape[0]), constant_values=np.nan)
+        elif x_vals.shape[0] > y.shape[0]:
+            x_vals = x_vals[: y.shape[0]]
     mask = ~np.isnan(y) & np.isfinite(x_vals)
     if mask.sum() < 2:
         continue
