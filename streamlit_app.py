@@ -44,6 +44,9 @@ LANGUAGES = {
         "y_axis": "Y os",
         "x_axes": "Počet X osí",
         "y_axes": "Počet pravých Y osí",
+        "x_auto_scale": "Automatické X škálovanie",
+        "x_min": "Min X",
+        "x_max": "Max X",
         "y_min": "Min Y",
         "y_max": "Max Y",
         "right_axes": "Počet pravých osí",
@@ -81,6 +84,9 @@ LANGUAGES = {
         "y_axis": "Y axis",
         "x_axes": "Number of X axes",
         "y_axes": "Number of right Y axes",
+        "x_auto_scale": "Auto X scale",
+        "x_min": "Min X",
+        "x_max": "Max X",
         "y_min": "Min Y",
         "y_max": "Max Y",
         "right_axes": "Number of right axes",
@@ -118,6 +124,9 @@ LANGUAGES = {
         "y_axis": "Ось Y",
         "x_axes": "Количество осей X",
         "y_axes": "Количество правых осей Y",
+        "x_auto_scale": "Авто X масштаб",
+        "x_min": "Мин X",
+        "x_max": "Макс X",
         "y_min": "Мин Y",
         "y_max": "Макс Y",
     },
@@ -154,6 +163,9 @@ LANGUAGES = {
         "y_axis": "Y osa",
         "x_axes": "Broj X osa",
         "y_axes": "Broj desnih Y osa",
+        "x_auto_scale": "Auto X skaliranje",
+        "x_min": "Min X",
+        "x_max": "Maks X",
         "y_min": "Min Y",
         "y_max": "Maks Y",
     },
@@ -237,6 +249,15 @@ legend_frame = st.sidebar.checkbox(tx["legend_frame"], False)
 # Let the widgets read/write session state via their `key`; avoid programmatically
 # passing session_state values into `value=` which can lead to widget/session
 # state policy warnings when mutated later.
+auto_x_scale = st.sidebar.checkbox(tx["x_auto_scale"], value=True, key="auto_x_scale")
+if not auto_x_scale:
+    col_x_min, col_x_max = st.sidebar.columns(2)
+    x_min = col_x_min.number_input(tx["x_min"], value=0.0, key="x_min")
+    x_max = col_x_max.number_input(tx["x_max"], value=1.0, key="x_max")
+else:
+    x_min = None
+    x_max = None
+
 num_x_axes = st.sidebar.number_input(tx["x_axes"], min_value=1, max_value=4, step=1, key="num_x_axes")
 num_right_axes = st.sidebar.number_input(tx["y_axes"], min_value=1, max_value=8, step=1, key="num_right_axes")
 
@@ -535,7 +556,18 @@ if grid_style != "None":
             pass
 
 # Stabilize x-limits so resizing doesn't create odd autoscaling shapes
-valid_x = x_axis_values[x_column_names[0]][np.isfinite(x_axis_values[x_column_names[0]])]
+if auto_x_scale:
+    longest_x = np.array([], dtype=float)
+    for arr in x_axis_values.values():
+        valid = arr[np.isfinite(arr)]
+        if valid.size > longest_x.size:
+            longest_x = valid
+    valid_x = longest_x
+else:
+    valid_x = np.array([], dtype=float)
+    if x_min is not None and x_max is not None and x_max > x_min:
+        valid_x = np.array([x_min, x_max], dtype=float)
+
 if valid_x.size > 0:
     if x_scale == 'log':
         pos = valid_x[valid_x > 0]
