@@ -302,7 +302,9 @@ for name in x_column_names:
         x_axis_values[name] = np.array([np.nan] * len(x_list))
 
 if np.any(np.isfinite(x_axis_values[x_column_names[0]])):
-    st.session_state.x_input = ", ".join([str(v) for v in x_axis_values[x_column_names[0]] if np.isfinite(v)])
+    # Don't assign to session_state during build (can raise StreamlitAPIException).
+    # Keep a local preview variable instead; user can edit X1 in the text input above.
+    x_input_preview = ", ".join([str(v) for v in x_axis_values[x_column_names[0]] if np.isfinite(v)])
 st.caption("Edit values directly in the table or import a CSV" if lang == "English" else "Upravte hodnoty priamo v tabuľke alebo importujte CSV" if lang == "Slovak" else "Редактируйте значения в таблице или импортируйте CSV" if lang == "Russian" else "Uređujte vrednosti direktno u tabeli ili uvezite CSV")
 
 
