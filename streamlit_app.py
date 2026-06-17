@@ -393,19 +393,9 @@ for idx in range(1, len(y_axis_options)):
     y_axes[y_name] = new_ax
 
 for y_name, y_ax in y_axes.items():
-    for x_idx, x_name in enumerate(x_axis_options):
-        if x_idx == 0:
-            axes_map[(x_name, y_name)] = y_ax
-        else:
-            new_x = y_ax.twiny()
-            new_x.spines['top'].set_position(('axes', 1.0 + 0.12 * (x_idx - 1)))
-            new_x.xaxis.set_label_position('top')
-            new_x.xaxis.set_ticks_position('top')
-            new_x.spines['top'].set_visible(True)
-            new_x.set_frame_on(True)
-            new_x.patch.set_visible(False)
-            new_x.set_xlabel(x_name)
-            axes_map[(x_name, y_name)] = new_x
+    # Map every X vector to the same displayed X axis (no additional top X axes)
+    for x_name in x_axis_options:
+        axes_map[(x_name, y_name)] = y_ax
 
 for s in st.session_state.series:
     if s["name"] not in df.columns:
