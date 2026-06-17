@@ -40,8 +40,13 @@ LANGUAGES = {
         "line_width": "Šírka čiary",
         "axis": "Os",
         "show_markers_series": "Zobraziť markery pre túto sériu",
+        "x_axis": "X os",
+        "y_axis": "Y os",
+        "x_axes": "Počet X osí",
+        "y_axes": "Počet pravých Y osí",
         "y_min": "Min Y",
         "y_max": "Max Y",
+        "right_axes": "Počet pravých osí",
     },
     "English": {
         "title": "📊 Plotting Graphics Characteristics",
@@ -72,8 +77,13 @@ LANGUAGES = {
         "line_width": "Line width",
         "axis": "Axis",
         "show_markers_series": "Show markers for this series",
+        "x_axis": "X axis",
+        "y_axis": "Y axis",
+        "x_axes": "Number of X axes",
+        "y_axes": "Number of right Y axes",
         "y_min": "Min Y",
         "y_max": "Max Y",
+        "right_axes": "Number of right axes",
     },
     "Russian": {
         "title": "📊 Построение графических характеристик",
@@ -104,6 +114,10 @@ LANGUAGES = {
         "line_width": "Ширина линии",
         "axis": "Ось",
         "show_markers_series": "Показать маркеры для этой серии",
+        "x_axis": "Ось X",
+        "y_axis": "Ось Y",
+        "x_axes": "Количество осей X",
+        "y_axes": "Количество правых осей Y",
         "y_min": "Мин Y",
         "y_max": "Макс Y",
     },
@@ -136,6 +150,10 @@ LANGUAGES = {
         "line_width": "Debljina linije",
         "axis": "Osa",
         "show_markers_series": "Prikaži markere za ovu seriju",
+        "x_axis": "X osa",
+        "y_axis": "Y osa",
+        "x_axes": "Broj X osa",
+        "y_axes": "Broj desnih Y osa",
         "y_min": "Min Y",
         "y_max": "Maks Y",
     },
@@ -151,10 +169,35 @@ st.markdown(tx["subtitle"])
 # Initialize series in session state (must happen before sidebar controls access it)
 if 'series' not in st.session_state:
     st.session_state.series = [
-        {"name": "P_k", "color": "#000000", "lw": 1, "axis": "Left", "show_markers": False},
-        {"name": "U_k", "color": "#ff1472", "lw": 1, "axis": "Right 1", "show_markers": False},
-        {"name": "cos φ_k", "color": "#00b4f0", "lw": 1, "axis": "Right 2", "show_markers": False},
+        {"name": "P_k", "color": "#000000", "lw": 1, "x_axis": "X1", "y_axis": "Left", "show_markers": False},
+        {"name": "U_k", "color": "#ff1472", "lw": 1, "x_axis": "X1", "y_axis": "Right 1", "show_markers": False},
+        {"name": "cos φ_k", "color": "#00b4f0", "lw": 1, "x_axis": "X1", "y_axis": "Right 2", "show_markers": False},
     ]
+
+if 'x_input' not in st.session_state:
+    st.session_state.x_input = "1, 2, 2.91, 3.46, 4.13"
+
+if 'num_x_axes' not in st.session_state:
+    st.session_state.num_x_axes = 2
+
+
+def parse_number_list(value_str):
+    if not isinstance(value_str, str):
+        return []
+    normalized = value_str.replace(';', ',').replace('−', '-')
+    values = []
+    for token in normalized.split(','):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            values.append(float(token))
+        except ValueError:
+            try:
+                values.append(float(token.replace(',', '.')))
+            except ValueError:
+                continue
+    return values
 
 
 # ====================== SIDEBAR ======================
@@ -180,6 +223,8 @@ legend_location = st.sidebar.selectbox(
 legend_font_size = st.sidebar.number_input(tx["legend_font_size"], value=10, min_value=6, max_value=30, step=1)
 legend_font_family = st.sidebar.selectbox(tx["legend_font_family"], ["sans", "serif", "monospace", "cursive", "fantasy", "dejavusans", "times"], index=0)
 legend_frame = st.sidebar.checkbox(tx["legend_frame"], False)
+num_x_axes = st.sidebar.number_input(tx["x_axes"], min_value=1, max_value=4, value=st.session_state.num_x_axes, step=1, key="num_x_axes")
+num_right_axes = st.sidebar.number_input(tx["y_axes"], min_value=1, max_value=8, value=st.session_state.get("num_right_axes", 3), step=1, key="num_right_axes")
 
 # CSV import
 uploaded = st.sidebar.file_uploader(tx["csv_import"] + " (first column X, other columns series)", type=["csv"])
@@ -193,14 +238,25 @@ col1, col2 = st.columns([1,1])
 with col1:
     if st.button("➕ " + tx["add_series"]):
         st.session_state.series.append({"name": f"Series {len(st.session_state.series)+1}", 
-                                      "color": "#000000", "lw": 1.5, "axis": "Right 1", "show_markers": False})
+                                      "color": "#000000", "lw": 1.5, "x_axis": "X1", "y_axis": "Right 1", "show_markers": False})
 
-# X values input (or from CSV)
-x_input = st.text_input(tx["x_values"], "1, 2, 2.91, 3.46, 4.13")
-try:
-    x_list = [float(x.strip()) for x in x_input.split(",") if x.strip()]
-except Exception:
+# X values input (or from CSV) for the first axis (X1)
+col_x_buttons, col_x_info = st.columns([1, 6])
+with col_x_buttons:
+    if st.button("➕ Add X vector"):
+        st.session_state.num_x_axes = min(4, st.session_state.num_x_axes + 1)
+        st.experimental_rerun()
+    if st.button("➖ Remove X vector") and st.session_state.num_x_axes > 1:
+        st.session_state.num_x_axes -= 1
+        st.experimental_rerun()
+with col_x_info:
+    st.markdown("**X vectors:** create multiple X value columns and assign them per series.")
+
+x_input = st.text_input(tx["x_values"] + " (X1)", value=st.session_state.x_input, key="x_input")
+x_list = parse_number_list(x_input)
+if not x_list:
     x_list = [1, 2, 3, 4, 5]
+    st.session_state.x_input = "1, 2, 3, 4, 5"
 
 # If CSV uploaded, read and populate
 if uploaded is not None:
@@ -212,7 +268,7 @@ if uploaded is not None:
             # populate series from other columns
             st.session_state.series = []
             for col in csv_df.columns[1:]:
-                st.session_state.series.append({"name": str(col), "color": "#000000", "lw": 1.5, "axis": "Right 1", "show_markers": False})
+                st.session_state.series.append({"name": str(col), "color": "#000000", "lw": 1.5, "x_axis": "X1", "y_axis": "Right 1", "show_markers": False})
             data_df = csv_df.copy()
         else:
             data_df = None
@@ -222,21 +278,40 @@ else:
     data_df = None
 
 # Data table construction
-data = {"X": x_list}
+x_column_names = [f"X{i+1}" for i in range(st.session_state.num_x_axes)]
+
+x_axis_values = {x_column_names[0]: x_list}
+for name in x_column_names[1:]:
+    x_axis_values[name] = [None] * len(x_list)
+
+data = {name: x_axis_values[name] for name in x_column_names}
 for s in st.session_state.series:
-    # if CSV provided and column exists, use it
     if data_df is not None and s["name"] in data_df.columns:
         data[s["name"]] = pd.to_numeric(data_df[s["name"]]).tolist()
     else:
         data[s["name"]] = [None] * len(x_list)
 
-df = st.data_editor(pd.DataFrame(data), num_rows="dynamic", use_container_width=True)
+df = st.data_editor(pd.DataFrame(data), num_rows="dynamic", use_container_width=True, key="series_table")
+
+# If the user edits the X values in the table, use those values for plotting.
+x_axis_values = {}
+for name in x_column_names:
+    if name in df.columns:
+        x_axis_values[name] = pd.to_numeric(df[name], errors='coerce').values
+    else:
+        x_axis_values[name] = np.array([np.nan] * len(x_list))
+
+if np.any(np.isfinite(x_axis_values[x_column_names[0]])):
+    st.session_state.x_input = ", ".join([str(v) for v in x_axis_values[x_column_names[0]] if np.isfinite(v)])
 st.caption("Edit values directly in the table or import a CSV" if lang == "English" else "Upravte hodnoty priamo v tabuľke alebo importujte CSV" if lang == "Slovak" else "Редактируйте значения в таблице или импортируйте CSV" if lang == "Russian" else "Uređujte vrednosti direktno u tabeli ili uvezite CSV")
 
 
 # ====================== SERIES CUSTOMIZATION ======================
 st.subheader(tx["series_customization"])
-axis_options = ["Left", "Right 1", "Right 2", "Right 3"]
+existing_right_axes = [int(s["y_axis"].split()[-1]) for s in st.session_state.series if isinstance(s.get("y_axis"), str) and s["y_axis"].startswith("Right ") and s["y_axis"].split()[-1].isdigit()]
+axis_count = max(num_right_axes, max(existing_right_axes) if existing_right_axes else 1)
+y_axis_options = ["Left"] + [f"Right {i+1}" for i in range(axis_count)]
+x_axis_options = [f"X{i+1}" for i in range(st.session_state.num_x_axes)]
 for i, s in enumerate(st.session_state.series):
     with st.expander(f"Series {i+1}: {s['name']}", expanded=(i==0)):
         col_exp1, col_exp2 = st.columns([4, 1])
@@ -249,7 +324,12 @@ for i, s in enumerate(st.session_state.series):
         
         new_color = st.color_picker(tx["color"], value=s.get("color", "#000000"), key=f"color_{i}")
         new_lw = st.number_input(tx["line_width"], value=float(s.get("lw",1.5)), min_value=0.5, max_value=10.0, step=0.1, key=f"lw_{i}")
-        new_axis = st.selectbox(tx["axis"], axis_options, index=axis_options.index(s.get("axis","Right 1")) if s.get("axis") in axis_options else 1, key=f"axis_{i}")
+        if s.get("x_axis") not in x_axis_options:
+            s["x_axis"] = x_axis_options[0]
+        new_x_axis = st.selectbox(tx["x_axis"], x_axis_options, index=x_axis_options.index(s.get("x_axis","X1")), key=f"x_axis_{i}")
+        if s.get("y_axis") not in y_axis_options:
+            s["y_axis"] = y_axis_options[0]
+        new_y_axis = st.selectbox(tx["y_axis"], y_axis_options, index=y_axis_options.index(s.get("y_axis","Right 1")) if s.get("y_axis","Right 1") in y_axis_options else 1, key=f"y_axis_{i}")
         new_show = st.checkbox(tx["show_markers_series"], value=s.get("show_markers", False), key=f"show_markers_{i}")
         
         # Y-axis scaling for this series
@@ -270,7 +350,8 @@ for i, s in enumerate(st.session_state.series):
         s["name"] = new_name
         s["color"] = new_color
         s["lw"] = float(new_lw)
-        s["axis"] = new_axis
+        s["x_axis"] = new_x_axis
+        s["y_axis"] = new_y_axis
         s["show_markers"] = bool(new_show)
 
 
@@ -281,36 +362,50 @@ ax = fig.add_subplot(111)
 if x_scale == 'log':
     ax.set_xscale('log')
 
-x = np.array(x_list, dtype=float)
 handles = []
 labels = []
-right_axes = []
+
+# Build axes so every series can plot against a chosen X axis and a chosen Y axis.
+axes_map = {}
+y_axes = {"Left": ax}
+for idx in range(1, len(y_axis_options)):
+    y_name = y_axis_options[idx]
+    new_ax = ax.twinx()
+    new_ax.spines['right'].set_position(('axes', 1.08 + 0.12 * (idx - 1)))
+    new_ax.set_frame_on(True)
+    new_ax.patch.set_visible(False)
+    y_axes[y_name] = new_ax
+
+for y_name, y_ax in y_axes.items():
+    for x_idx, x_name in enumerate(x_axis_options):
+        if x_idx == 0:
+            axes_map[(x_name, y_name)] = y_ax
+        else:
+            new_x = y_ax.twiny()
+            new_x.spines['top'].set_position(('axes', 1.0 + 0.12 * (x_idx - 1)))
+            new_x.xaxis.set_label_position('top')
+            new_x.xaxis.set_ticks_position('top')
+            new_x.spines['top'].set_visible(True)
+            new_x.set_frame_on(True)
+            new_x.patch.set_visible(False)
+            new_x.set_xlabel(x_name)
+            axes_map[(x_name, y_name)] = new_x
 
 for s in st.session_state.series:
     if s["name"] not in df.columns:
         continue
     y = pd.to_numeric(df[s["name"]], errors='coerce').values.astype(float)
-    mask = ~np.isnan(y)
+    x_axis_name = s.get("x_axis", "X1")
+    x_vals = x_axis_values.get(x_axis_name, np.array([np.nan] * len(y), dtype=float))
+    mask = ~np.isnan(y) & np.isfinite(x_vals)
     if mask.sum() < 2:
         continue
 
-    # choose axis
-    if s["axis"] == "Left":
-        current_ax = ax
-    else:
-        idx = int(s["axis"].split()[-1])
-        # ensure we have enough right axes
-        while len(right_axes) < idx:
-            if len(right_axes) == 0:
-                new_ax = ax.twinx()
-            else:
-                new_ax = ax.twinx()
-                new_ax.spines['right'].set_position(('axes', 1.08 + (len(right_axes)-0)*0.13))
-            right_axes.append(new_ax)
-        current_ax = right_axes[idx-1]
+    y_axis_name = s.get("y_axis", "Left")
+    current_ax = axes_map.get((x_axis_name, y_axis_name), ax)
 
     # prepare data: aggregate duplicate X values and sort
-    x_masked = x[mask]
+    x_masked = x_vals[mask]
     y_masked = y[mask]
     df_xy = pd.DataFrame({"x": x_masked, "y": y_masked})
     df_xy = df_xy.groupby('x', as_index=False).mean()
@@ -382,21 +477,22 @@ if st.session_state.series:
             pass
 
 # Right axis labels color sync and font (optional)
-for i, rax in enumerate(right_axes):
-    axis_name = f"Right {i+1}"
-    # Find first series on this axis to get name and color
-    series_on_axis = [s for s in st.session_state.series if s.get("axis") == axis_name]
+for y_name, rax in y_axes.items():
+    if y_name == "Left":
+        continue
+    series_on_axis = [s for s in st.session_state.series if s.get("y_axis") == y_name]
     if series_on_axis:
         first_series = series_on_axis[0]
         rax.set_ylabel(first_series["name"], color=first_series["color"], fontsize=label_fs, fontfamily=legend_font_family)
-        rax.spines['right'].set_color(first_series["color"])
+        try:
+            rax.spines['right'].set_color(first_series["color"])
+        except Exception:
+            pass
         rax.tick_params(axis='y', colors=first_series["color"], labelsize=tick_fs)
-    
     try:
         rax.spines['right'].set_visible(True)
     except Exception:
         pass
-    # set tick label size and font family for right axes
     try:
         for lbl in rax.get_yticklabels():
             try:
@@ -416,14 +512,14 @@ elif grid_style == "Major only":
     ax.minorticks_on()
 # ensure right axes also show minor ticks and similar grid lines if requested
 if grid_style != "None":
-    for rax in right_axes:
+    for y_name, rax in y_axes.items():
         try:
             rax.minorticks_on()
         except Exception:
             pass
 
 # Stabilize x-limits so resizing doesn't create odd autoscaling shapes
-valid_x = x[np.isfinite(x)]
+valid_x = x_axis_values[x_column_names[0]][np.isfinite(x_axis_values[x_column_names[0]])]
 if valid_x.size > 0:
     if x_scale == 'log':
         pos = valid_x[valid_x > 0]
@@ -433,23 +529,17 @@ if valid_x.size > 0:
         ax.set_xlim(valid_x.min(), valid_x.max())
 
 # Apply per-series Y scaling (collect all series on each axis and apply their scaling)
-axis_scaling = {"Left": None, "Right 1": None, "Right 2": None, "Right 3": None}
+axis_scaling = {y_name: None for y_name in y_axis_options}
 for s in st.session_state.series:
-    axis_name = s.get("axis", "Left")
-    if not s.get("auto_scale_y", True):  # If not auto scaling
+    axis_name = s.get("y_axis", "Left")
+    if not s.get("auto_scale_y", True):
         y_min = s.get("y_min", 0.0)
         y_max = s.get("y_max", 1.0)
         axis_scaling[axis_name] = (y_min, y_max)
 
-# Apply scaling to left axis
-if axis_scaling["Left"] is not None:
-    ax.set_ylim(axis_scaling["Left"][0], axis_scaling["Left"][1])
-
-# Apply scaling to right axes
-for i, rax in enumerate(right_axes):
-    axis_name = f"Right {i+1}"
-    if axis_scaling[axis_name] is not None:
-        rax.set_ylim(axis_scaling[axis_name][0], axis_scaling[axis_name][1])
+for y_name, rax in y_axes.items():
+    if axis_scaling.get(y_name) is not None:
+        rax.set_ylim(axis_scaling[y_name][0], axis_scaling[y_name][1])
 
 # Legend
 if handles:
