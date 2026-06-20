@@ -112,7 +112,11 @@ if 'table_data' not in st.session_state:
         "cos φ_k": [np.nan]*5
     })
 
+if 'latest_edited_df' not in st.session_state:
+    st.session_state.latest_edited_df = st.session_state.table_data.copy()
+
 # Sync renamed series headers smoothly safely before rendering editor
+columns_changed = False
 for i, s in enumerate(st.session_state.series):
     widget_key = f"name_{i}"
     if widget_key in st.session_state and st.session_state[widget_key] != s["name"]:
@@ -120,7 +124,10 @@ for i, s in enumerate(st.session_state.series):
         new_name = st.session_state[widget_key]
         if old_name in st.session_state.table_data.columns:
             st.session_state.table_data.rename(columns={old_name: new_name}, inplace=True)
+        if old_name in st.session_state.latest_edited_df.columns:
+            st.session_state.latest_edited_df.rename(columns={old_name: new_name}, inplace=True)
         s["name"] = new_name
+        columns_changed = True
 
 
 # ====================== SIDEBAR ======================
@@ -168,6 +175,7 @@ if uploaded is not None and st.session_state.get('last_uploaded') != uploaded.na
         csv_df = pd.read_csv(uploaded)
         if csv_df.shape[1] >= 2:
             st.session_state.table_data = csv_df
+            st.session_state.latest_edited_df = csv_df.copy()
             st.session_state.last_uploaded = uploaded.name
             st.session_state.series = []
             for i, col in enumerate(csv_df.columns[1:]):
@@ -189,30 +197,33 @@ target_x_cols = [f"X{i+1}" for i in range(st.session_state.num_x_axes)]
 target_y_cols = [s["name"] for s in st.session_state.series]
 target_cols = target_x_cols + target_y_cols
 
-# CRITICAL FIX: Only touch data structure if configuration actually mismatched
-if list(st.session_state.table_data.columns) != target_cols:
-    synchronized_df = pd.DataFrame(columns=target_cols)
+# CRITICAL SYNC FIX: Reconstruct schemas strictly based on matching layout rules or modifications
+if list(st.session_state.table_data.columns) != target_cols or columns_changed:
+    base_source = st.session_state.latest_edited_df
+    synchronized_df = pd.DataFrame(index=base_source.index)
+    
     for c in target_cols:
-        if c in st.session_state.table_data.columns:
-            synchronized_df[c] = st.session_state.table_data[c]
+        if c in base_source.columns:
+            synchronized_df[c] = base_source[c]
         else:
-            synchronized_df[c] = [np.nan] * len(st.session_state.table_data)
+            synchronized_df[c] = pd.Series(dtype='float64', index=base_source.index)
             
     if len(synchronized_df) == 0:
         synchronized_df = pd.DataFrame(np.nan, index=range(5), columns=target_cols)
         
     st.session_state.table_data = synchronized_df
+    st.session_state.latest_edited_df = synchronized_df.copy()
 
 col_config = {}
 for c in st.session_state.table_data.columns:
     if c.startswith("X"):
-        col_config[c] = st.column_config.NumberColumn(f"🔴 {c}")
+        col_config[c] = st.column_config.NumberColumn(f"🔴 {c}", format="%.4f")
     else:
-        col_config[c] = st.column_config.NumberColumn(f"🔵 {c}")
+        col_config[c] = st.column_config.NumberColumn(f"🔵 {c}", format="%.4f")
 
 st.caption("Hodnoty zadávaj a upravuj priamo v tabuľke (podporuje šípky na klávesnici).")
 
-# CRITICAL FIX: Added explicit 'key' parameter to preserve keyboard focus state entirely
+# CRITICAL FIX: Retained matching tracking key and prevented reference loop back assignments
 edited_df = st.data_editor(
     st.session_state.table_data, 
     num_rows="dynamic", 
@@ -220,7 +231,7 @@ edited_df = st.data_editor(
     column_config=col_config,
     key="lab_data_editor"
 )
-st.session_state.table_data = edited_df
+st.session_state.latest_edited_df = edited_df
 
 x_axis_values = {}
 for x_col in target_x_cols:
@@ -267,10 +278,10 @@ for i, s in enumerate(st.session_state.series):
         auto_scale_y = st.checkbox(f"Auto scale Y", value=s.get("auto_scale_y", True), key=f"auto_scale_y_{i}")
         if not auto_scale_y:
             col_y1, col_y2 = st.columns(2)
-            y_min = col_y1.number_input(f"Min Y", value=float(s.get("y_min", 0.0)), key=f"y_min_{i}")
-            y_max = col_y2.number_input(f"Max Y", value=float(s.get("y_max", 1.0)), key=f"y_max_{i}")
-            s["y_min"] = y_min
-            s["y_max"] = y_max
+            y_min_val = col_y1.number_input(f"Min Y", value=float(s.get("y_min", 0.0)), key=f"y_min_{i}")
+            y_max_val = col_y2.number_input(f"Max Y", value=float(s.get("y_max", 1.0)), key=f"y_max_{i}")
+            s["y_min"] = y_min_val
+            s["y_max"] = y_max_val
             s["auto_scale_y"] = False
         else:
             s["auto_scale_y"] = True
@@ -459,9 +470,9 @@ axis_scaling = {y_name: None for y_name in y_axis_options}
 for s in st.session_state.series:
     axis_name = s.get("y_axis", "Left")
     if not s.get("auto_scale_y", True):
-        y_min = s.get("y_min", 0.0)
-        y_max = s.get("y_max", 1.0)
-        axis_scaling[axis_name] = (y_min, y_max)
+        y_smin = s.get("y_min", 0.0)
+        y_smax = s.get("y_max", 1.0)
+        axis_scaling[axis_name] = (y_smin, y_smax)
 
 for y_name, rax in y_axes.items():
     if axis_scaling.get(y_name) is not None:
