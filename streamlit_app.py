@@ -9,6 +9,30 @@ import os
 import urllib.request
 import matplotlib.font_manager as fm
 
+
+
+
+
+
+
+# 1. Force the global font family to be monospace
+plt.rcParams['font.family'] = 'monospace'
+
+# 2. Define the priority order of monospace fonts Matplotlib should look for 
+# before falling back to the generic system 'monospace'
+plt.rcParams['font.monospace'] = [
+    'Liberation Mono', 
+    'DejaVu Sans Mono', 
+    'Courier New', 
+    'Consolas', 
+    'monospace'
+]
+
+
+
+
+
+
 # Dictionary of clean technical fonts to download if missing
 FONT_PACKAGES = {
     "LiberationSans-Regular.ttf": "https://github.com/liberationfonts/liberation-fonts/raw/main/src/LiberationSans-Regular.ttf",
