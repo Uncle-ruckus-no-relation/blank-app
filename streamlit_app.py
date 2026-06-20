@@ -5,7 +5,26 @@ import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 from scipy.interpolate import PchipInterpolator
 from io import BytesIO
+import os
+import urllib.request
+import matplotlib.font_manager as fm
 
+# Dictionary of clean technical fonts to download if missing
+FONT_PACKAGES = {
+    "LiberationSans-Regular.ttf": "https://github.com/liberationfonts/liberation-fonts/raw/main/src/LiberationSans-Regular.ttf",
+    "LiberationSerif-Regular.ttf": "https://github.com/liberationfonts/liberation-fonts/raw/main/src/LiberationSerif-Regular.ttf",
+    "LiberationMono-Regular.ttf": "https://github.com/liberationfonts/liberation-fonts/raw/main/src/LiberationMono-Regular.ttf"
+}
+
+# Automatically download and register the font packages
+for font_name, font_url in FONT_PACKAGES.items():
+    if not os.path.exists(font_name):
+        try:
+            urllib.request.urlretrieve(font_url, font_name)
+        except Exception:
+            pass # Fallback gracefully if offline
+    if os.path.exists(font_name):
+        fm.fontManager.addfont(font_name)
 st.set_page_config(page_title="Electronics Lab Plotter", layout="wide")
 
 # ====================== LANGUAGE SUPPORT ======================
