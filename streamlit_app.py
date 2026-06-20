@@ -11,7 +11,7 @@ st.set_page_config(page_title="Electronics Lab Plotter", layout="wide")
 # ====================== LANGUAGE SUPPORT ======================
 LANGUAGES = {
     "Slovak": {
-        "title": "📊 Vykresľovanie grafických charakteristík",
+        "title": "📊 PVykresľovanie grafických charakteristík",
         "subtitle": "**Nástroj na vykresľovanie priebehov pre elektrotechnické merania**",
         "plot_settings": "Nastavenia grafu",
         "plot_title": "Názov grafu",
@@ -83,8 +83,7 @@ LANGUAGES = {
         "x_max": "Max X",
         "y_min": "Min Y",
         "y_max": "Max Y",
-    },
-    # (Prehľadnosť kódu: Ostatné jazyky z tvojho slovníka tu môžu ostať rovnaké)
+    }
 }
 
 # Language selector
@@ -105,7 +104,6 @@ if 'series' not in st.session_state:
 if 'num_x_axes' not in st.session_state:
     st.session_state.num_x_axes = 1
 
-# Base dataframe init
 if 'table_data' not in st.session_state:
     st.session_state.table_data = pd.DataFrame({
         "X1": [1.0, 2.0, 2.91, 3.46, 4.13],
@@ -114,13 +112,12 @@ if 'table_data' not in st.session_state:
         "cos φ_k": [np.nan]*5
     })
 
-# Pred premenovaním/zmazaním sérií cez expandery zistíme zmeny názvov z widgetov z predchádzajúceho behu
+# Sync renamed series headers smoothly safely before rendering editor
 for i, s in enumerate(st.session_state.series):
     widget_key = f"name_{i}"
     if widget_key in st.session_state and st.session_state[widget_key] != s["name"]:
         old_name = s["name"]
         new_name = st.session_state[widget_key]
-        # Aktualizujeme názov stĺpca v DataFrame, aby sme nestratili dáta
         if old_name in st.session_state.table_data.columns:
             st.session_state.table_data.rename(columns={old_name: new_name}, inplace=True)
         s["name"] = new_name
@@ -157,7 +154,6 @@ else:
     x_min = None
     x_max = None
 
-# Zmena: Osi zadávame cez sidebar
 num_x_axes = st.sidebar.number_input(tx["x_axes"], min_value=1, max_value=4, step=1, key="num_x_axes")
 num_right_axes = st.sidebar.number_input(tx["y_axes"], min_value=0, max_value=8, step=1, key="num_right_axes")
 
@@ -167,7 +163,6 @@ uploaded = st.sidebar.file_uploader(tx["csv_import"], type=["csv"])
 # ====================== SERIES & DATA ======================
 st.header(tx["data_series"])
 
-# CSV Import Logic
 if uploaded is not None and st.session_state.get('last_uploaded') != uploaded.name:
     try:
         csv_df = pd.read_csv(uploaded)
@@ -184,43 +179,49 @@ if uploaded is not None and st.session_state.get('last_uploaded') != uploaded.na
     except Exception:
         pass
 
-# Add Series button
 if st.button("➕ " + tx["add_series"]):
     new_idx = len(st.session_state.series) + 1
-    new_name = f"Series {new_idx}"
-    st.session_state.series.append({"name": new_name, "color": "#000000", "lw": 1.5, "x_axis": "X1", "y_axis": "Left", "show_markers": False})
+    st.session_state.series.append({"name": f"Series {new_idx}", "color": "#000000", "lw": 1.5, "x_axis": "X1", "y_axis": "Left", "show_markers": False})
 
 
-# ====================== DATAFRAME SYNC ======================
-# Synchronizácia aktuálnych osí (X a Y) s DataFrame
-current_cols = list(st.session_state.table_data.columns)
+# ====================== DATAFRAME SYNC (OPTIMIZED) ======================
 target_x_cols = [f"X{i+1}" for i in range(st.session_state.num_x_axes)]
 target_y_cols = [s["name"] for s in st.session_state.series]
 target_cols = target_x_cols + target_y_cols
 
-# Pridaj chýbajúce
-for c in target_cols:
-    if c not in current_cols:
-        st.session_state.table_data[c] = [np.nan] * len(st.session_state.table_data)
+# CRITICAL FIX: Only touch data structure if configuration actually mismatched
+if list(st.session_state.table_data.columns) != target_cols:
+    synchronized_df = pd.DataFrame(columns=target_cols)
+    for c in target_cols:
+        if c in st.session_state.table_data.columns:
+            synchronized_df[c] = st.session_state.table_data[c]
+        else:
+            synchronized_df[c] = [np.nan] * len(st.session_state.table_data)
+            
+    if len(synchronized_df) == 0:
+        synchronized_df = pd.DataFrame(np.nan, index=range(5), columns=target_cols)
+        
+    st.session_state.table_data = synchronized_df
 
-# Odstráň prebytočné
-for c in current_cols:
-    if c not in target_cols:
-        st.session_state.table_data.drop(columns=[c], inplace=True)
-
-# Nastavenie zobrazenia stĺpcov pre Editor (Farebné označenie hlavičky)
 col_config = {}
 for c in st.session_state.table_data.columns:
     if c.startswith("X"):
-        col_config[c] = st.column_config.NumberColumn(f"🔴 {c}") # Červená pre X
+        col_config[c] = st.column_config.NumberColumn(f"🔴 {c}")
     else:
-        col_config[c] = st.column_config.NumberColumn(f"🔵 {c}") # Modrá pre Y
+        col_config[c] = st.column_config.NumberColumn(f"🔵 {c}")
 
 st.caption("Hodnoty zadávaj a upravuj priamo v tabuľke (podporuje šípky na klávesnici).")
-edited_df = st.data_editor(st.session_state.table_data, num_rows="dynamic", use_container_width=True, column_config=col_config)
+
+# CRITICAL FIX: Added explicit 'key' parameter to preserve keyboard focus state entirely
+edited_df = st.data_editor(
+    st.session_state.table_data, 
+    num_rows="dynamic", 
+    use_container_width=True, 
+    column_config=col_config,
+    key="lab_data_editor"
+)
 st.session_state.table_data = edited_df
 
-# Extrahovanie upravených hodnôt pre vykresľovanie
 x_axis_values = {}
 for x_col in target_x_cols:
     x_axis_values[x_col] = pd.to_numeric(edited_df[x_col], errors='coerce').values
@@ -290,11 +291,9 @@ if x_scale == 'log':
 
 handles = []
 labels = []
-
 axes_map = {}
 y_axes = {"Left": ax}
 
-# Vykreslenie dodatočných pravých osí (len ak num_right_axes > 0)
 for idx in range(1, len(y_axis_options)):
     y_name = y_axis_options[idx]
     new_ax = ax.twinx()
@@ -432,7 +431,6 @@ if grid_style != "None":
         except Exception:
             pass
 
-# Stabilizácia limitov x-osi (Automatický adaptabilný Autoscale)
 if auto_x_scale:
     all_valid_x = []
     for arr in x_axis_values.values():
