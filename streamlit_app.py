@@ -17,24 +17,6 @@ FONT_PACKAGES = {
 }
 
 
-TIMES_PACKAGES = {
-    "Times_New_Roman.ttf": "https://github.com/as00799/pypdf2/raw/master/resources/font/Times%20New%20Roman.ttf",
-    "Times_New_Roman_Bold.ttf": "https://github.com/as00799/pypdf2/raw/master/resources/font/Times%20New%20Roman%20Bold.ttf",
-    "Times_New_Roman_Italic.ttf": "https://github.com/as00799/pypdf2/raw/master/resources/font/Times%20New%20Roman%20Italic.ttf"
-}
-
-# Download and register them silently
-for font_name, font_url in TIMES_PACKAGES.items():
-    if not os.path.exists(font_name):
-        try:
-            # Set a standard User-Agent headers to avoid bot-blocking blocks
-            req = urllib.request.Request(font_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req) as response, open(font_name, 'wb') as out_file:
-                out_file.write(response.read())
-        except Exception:
-            pass
-    if os.path.exists(font_name):
-        fm.fontManager.addfont(font_name)
 
 # Automatically download and register the font packages
 for font_name, font_url in FONT_PACKAGES.items():
