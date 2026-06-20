@@ -30,7 +30,7 @@ st.set_page_config(page_title="Electronics Lab Plotter", layout="wide")
 # ====================== LANGUAGE SUPPORT ======================
 LANGUAGES = {
     "Slovak": {
-        "title": "📊 PVykresľovanie grafických charakteristík",
+        "title": "📊 Vykresľovanie grafických charakteristík",
         "subtitle": "**Nástroj na vykresľovanie priebehov pre elektrotechnické merania**",
         "plot_settings": "Nastavenia grafu",
         "plot_title": "Názov grafu",
